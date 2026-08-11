@@ -1,0 +1,87 @@
+{
+  "expo": {
+    "name": "Cadence",
+    "slug": "cadence",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "cadence",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "primaryColor": "#0E4D4A",
+    "description": "Duolingo for speaking — a 2-minute daily prompt that makes you sharper before the interview, the meeting, or the camera.",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cadence.speak",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Cadence needs the microphone so you can practice speaking and get coached.",
+        "NSSpeechRecognitionUsageDescription": "Cadence transcribes your practice so we can coach fillers, pace, and clarity.",
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0E4D4A",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "RECORD_AUDIO",
+        "POST_NOTIFICATIONS",
+        "MODIFY_AUDIO_SETTINGS"
+      ],
+      "package": "com.cadence.speak",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "name": "Cadence",
+      "shortName": "Cadence",
+      "themeColor": "#0E4D4A",
+      "backgroundColor": "#F3EDE3"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#F3EDE3"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0E4D4A",
+          "defaultChannel": "daily-reminder"
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Cadence needs the microphone so you can practice speaking and get coached."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Cadence needs the microphone so you can practice speaking and get coached.",
+          "speechRecognitionPermission": "Cadence transcribes your practice so we can coach fillers, pace, and clarity."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
