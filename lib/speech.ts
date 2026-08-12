@@ -51,33 +51,29 @@ export async function requestMicAccess(): Promise<{ ok: boolean; reason?: 'denie
 export function startSpeechEngine() {
   try {
     ExpoSpeechRecognitionModule.start({
-    lang: 'en-US',
-    interimResults: true,
-    continuous: true,
-    maxAlternatives: 1,
-    addsPunctuation: true,
-    contextualStrings: [
-      'um',
-      'uh',
-      'like',
-      'basically',
-      'you know',
-      'I mean',
-      'actually',
-      'literally',
-      'kind of',
-      'sort of',
-    ],
-    volumeChangeEventOptions: {
-      enabled: Platform.OS !== 'web',
-      intervalMillis: 120,
-    },
+      lang: 'en-US',
+      interimResults: true,
+      continuous: true,
+      maxAlternatives: 1,
+      addsPunctuation: true,
+      contextualStrings: [
+        'um',
+        'uh',
+        'like',
+        'basically',
+        'you know',
+        'I mean',
+        'actually',
+        'literally',
+        'kind of',
+        'sort of',
+      ],
+      volumeChangeEventOptions: {
+        enabled: Platform.OS !== 'web',
+        intervalMillis: 120,
+      },
     });
   } catch (error) {
-    console.warn('Speech engine failed to start', error);
-    throw error;
-  }
-} catch (error) {
     console.warn('Speech engine failed to start', error);
     throw error;
   }
