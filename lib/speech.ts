@@ -30,13 +30,27 @@ export async function requestMicAccess(): Promise<{ ok: boolean; reason?: 'denie
     }
   }
 
-  const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-  if (!perm.granted) return { ok: false, reason: 'denied' };
-  return { ok: true };
+  try {
+    const mic = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
+    if (!mic.granted) return { ok: false, reason: 'denied' };
+
+    if (Platform.OS === 'ios') {
+      const speech = await ExpoSpeechRecognitionModule.requestSpeechRecognizerPermissionsAsync();
+      if (!speech.granted) return { ok: false, reason: 'denied' };
+    } else {
+      const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!perm.granted) return { ok: false, reason: 'denied' };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'unsupported' };
+  }
 }
 
 export function startSpeechEngine() {
-  ExpoSpeechRecognitionModule.start({
+  try {
+    ExpoSpeechRecognitionModule.start({
     lang: 'en-US',
     interimResults: true,
     continuous: true,
@@ -58,7 +72,15 @@ export function startSpeechEngine() {
       enabled: Platform.OS !== 'web',
       intervalMillis: 120,
     },
-  });
+    });
+  } catch (error) {
+    console.warn('Speech engine failed to start', error);
+    throw error;
+  }
+} catch (error) {
+    console.warn('Speech engine failed to start', error);
+    throw error;
+  }
 }
 
 export function stopSpeechEngine() {

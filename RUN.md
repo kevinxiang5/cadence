@@ -8,59 +8,111 @@ It will **not** fully work inside Expo Go.
 
 ---
 
-## What you need to do (Kevin)
+## Mac / Xcode (what to run now)
 
-### Option A — Phone app (recommended)
+CocoaPods Homebrew auto-install is skipped. Use `--no-install`, then install pods yourself.
+
+In **Terminal** from the repo folder:
+
+```bash
+cd ~/Desktop/cadence
+git pull
+npm install
+
+# confirm CocoaPods works (ignore uuid deprecation warnings)
+pod --version
+
+# generate iOS project WITHOUT Homebrew
+npx expo prebuild --platform ios --no-install
+
+# install native iOS deps
+cd ios
+pod install
+cd ..
+
+open ios/*.xcworkspace
+```
+
+Then in **Xcode**:
+1. Pick a simulator, **or** plug in your iPhone and pick it
+2. Signing & Capabilities → select **your Apple team** (needed for a real phone)
+3. Hit **Run**
+4. In a second Terminal tab, keep Metro running:
+
+```bash
+cd ~/Desktop/cadence
+npx expo start
+```
+
+5. On the phone/simulator, allow **Microphone** + **Speech Recognition**
+
+Speech recognition is much more reliable on a **real iPhone** than the simulator.
+
+If `prebuild` left a half-broken `ios/` folder, wipe it and retry:
+
+```bash
+rm -rf ios
+npx expo prebuild --platform ios --no-install
+cd ios && pod install && cd ..
+open ios/*.xcworkspace
+```
+
+Shortcut after CocoaPods is already installed:
+
+```bash
+npx expo run:ios
+```
+
+---
+
+## Option A — Phone app via EAS (cloud build)
 
 1. **Create a free Expo account** → https://expo.dev/signup  
 2. In a terminal:
 
 ```bash
-cd "c:\Users\good\Desktop\New folder (6)\cadence"
+cd cadence
 npm install
 npx eas-cli login
 npx eas init
 ```
 
-3. Build a installable app:
+3. Build:
 
-**Android (easiest on Windows):**
+**Android:**
 ```bash
 npm run build:dev:android
 ```
-When the build finishes, open the Expo link → download the APK → install on your phone.
 
 **iPhone:**
-- You need an Apple Developer account ($99/year) for a device build
+- Apple Developer account ($99/year) for a device build
 - Then: `npm run build:dev:ios`
-- Install via the Expo QR / TestFlight link EAS gives you
 
-4. After install, start Metro and open Cadence:
+4. After install:
 ```bash
 npx expo start --dev-client
 ```
-Scan the QR code with the Cadence app you just installed (not Expo Go).
 
-5. Allow **Microphone** + **Speech Recognition** when prompted.
+5. Allow **Microphone** + **Speech Recognition**.
 
 ---
 
-### Option B — Browser (fastest to try coaching)
+## Option B — Browser (fastest to try coaching)
 
 ```bash
-cd "c:\Users\good\Desktop\New folder (6)\cadence"
+cd cadence
 npm install
 npx expo start --web
 ```
 
-Open **http://localhost:8081 in Chrome or Edge** (not Cursor’s Simple Browser).  
+Open **http://localhost:8081 in Chrome or Edge**.  
 Allow the mic → Speak now → talk → Stop & analyze.
 
 ---
 
-### Option C — Demo with no mic
+## Option C — Demo with no mic
 
-In the app: **Speak now → “No mic? Try a demo sample” → Messy first take → Save**
+**Speak now → “No mic? Try a demo sample” → Messy first take → Save**
 
 ---
 
@@ -86,5 +138,3 @@ In the app: **Speak now → “No mic? Try a demo sample” → Messy first take
 2. Speak today’s prompt (or prep 2–5 min first)  
 3. Get fillers / WPM / upgrades  
 4. Save → streak + XP update  
-
-That’s the whole product.

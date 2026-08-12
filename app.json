@@ -20,6 +20,7 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Cadence needs the microphone so you can practice speaking and get coached.",
         "NSSpeechRecognitionUsageDescription": "Cadence transcribes your practice so we can coach fillers, pace, and clarity.",
+        "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["audio"]
       }
     },

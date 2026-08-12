@@ -53,7 +53,11 @@ export default function OnboardingScreen() {
 
   const finish = async () => {
     completeOnboarding({ name, goal, reminderHour: hour, reminderMinute: minute });
-    await scheduleDailyReminder(hour, minute, name.trim() || 'Hey');
+    try {
+      await scheduleDailyReminder(hour, minute, name.trim() || 'Hey');
+    } catch {
+      // Reminders are optional — don't block first launch.
+    }
     router.replace('/(tabs)');
   };
 
