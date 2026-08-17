@@ -22,4 +22,4 @@ Delete the app to remove sessions, streaks, and custom prompts from this device.
 
 ## Contact
 
-Questions: https://github.com/kevinxiang5/cadence/issues
+Questions: [github.com/kevinxiang5/cadence/issues](https://github.com/kevinxiang5/cadence/issues)
