@@ -1,21 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSpeechRecognitionEvent } from 'expo-speech-recognition';
 
 import { countSpokenWords, wpmAt, type PacePoint } from '@/lib/pace';
 import {
   MAX_SPEAK_SECONDS,
-  abortSpeechEngine,
+  getWebSpeechRecognitionCtor,
   isSpeechRecognitionAvailable,
   joinTranscriptParts,
   requestMicAccess,
-  startSpeechEngine,
-  stopSpeechEngine,
 } from '@/lib/speech';
-import {
-  enrichRecognitionChunk,
-  polishSpokenTranscript,
-  type RecognitionSegment,
-} from '@/lib/transcript';
+import { polishSpokenTranscript } from '@/lib/transcript';
 
 export type CaptureStatus =
   | 'idle'
@@ -61,6 +54,7 @@ export function useSpeechCapture(options: Options = {}) {
   const lastSpeechEndRef = useRef<number | null>(null);
   const pendingPauseRef = useRef(0);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const paceRef = useRef<PacePoint[]>([]);
   const [paceSeries, setPaceSeries] = useState<PacePoint[]>([]);
 
@@ -99,11 +93,125 @@ export function useSpeechCapture(options: Options = {}) {
     }
   }, []);
 
+  const stopEngine = useCallback(() => {
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!rec) return;
+    rec.onresult = null;
+    rec.onerror = null;
+    rec.onend = null;
+    rec.onspeechstart = null;
+    rec.onspeechend = null;
+    try {
+      rec.stop();
+    } catch {
+      try {
+        rec.abort();
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const startEngine = useCallback(() => {
+    const Ctor = getWebSpeechRecognitionCtor();
+    if (!Ctor) throw new Error('unsupported');
+
+    stopEngine();
+    const rec = new Ctor();
+    rec.lang = 'en-US';
+    rec.interimResults = true;
+    rec.continuous = true;
+    rec.maxAlternatives = 3;
+
+    rec.onresult = (event) => {
+      let interim = '';
+      const newlyFinal: string[] = [];
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        const chunk = result[0]?.transcript ?? '';
+        if (result.isFinal) {
+          const trimmed = chunk.trim();
+          if (trimmed) {
+            chunksRef.current = [
+              ...chunksRef.current,
+              { text: trimmed, pauseBeforeMs: pendingPauseRef.current },
+            ];
+            pendingPauseRef.current = 0;
+            newlyFinal.push(trimmed);
+          }
+        } else {
+          interim += chunk;
+        }
+      }
+      if (newlyFinal.length) {
+        finalsRef.current = chunksRef.current.map((c) => c.text);
+        setFinalText(assembled(false));
+      }
+      interimRef.current = interim;
+      setInterimText(interim);
+    };
+
+    rec.onspeechend = () => {
+      lastSpeechEndRef.current = Date.now();
+    };
+
+    rec.onspeechstart = () => {
+      if (lastSpeechEndRef.current) {
+        const gap = Date.now() - lastSpeechEndRef.current;
+        pendingPauseRef.current = Math.max(pendingPauseRef.current, gap);
+        if (gap >= 700) {
+          pausesRef.current += 1;
+          setPauses(pausesRef.current);
+        }
+      }
+    };
+
+    rec.onerror = (event) => {
+      if (
+        event.error === 'no-speech' ||
+        event.error === 'aborted' ||
+        event.error === 'audio-capture'
+      ) {
+        return;
+      }
+      if (event.error === 'not-allowed') {
+        wantListeningRef.current = false;
+        clearTimers();
+        stopEngine();
+        setStatus('denied');
+        setErrorMessage('Microphone permission was denied.');
+      }
+    };
+
+    rec.onend = () => {
+      if (!wantListeningRef.current) {
+        setStatus('idle');
+        return;
+      }
+      if (elapsedRef.current >= maxSeconds) {
+        return;
+      }
+      restartTimerRef.current = setTimeout(() => {
+        if (!wantListeningRef.current) return;
+        try {
+          startEngine();
+        } catch {
+          // ignore restart failure
+        }
+      }, 180);
+    };
+
+    recognitionRef.current = rec;
+    rec.start();
+    setStatus('listening');
+  }, [clearTimers, maxSeconds, stopEngine]);
+
   const stopInternal = useCallback(
     (emitAutoStop: boolean) => {
       wantListeningRef.current = false;
       clearTimers();
-      stopSpeechEngine();
+      stopEngine();
       setStatus('idle');
       const transcript = flushTranscript();
       const result = {
@@ -115,99 +223,16 @@ export function useSpeechCapture(options: Options = {}) {
       if (emitAutoStop) onAutoStopRef.current?.(result);
       return result;
     },
-    [clearTimers]
+    [clearTimers, stopEngine]
   );
-
-  useSpeechRecognitionEvent('start', () => {
-    if (wantListeningRef.current) setStatus('listening');
-  });
-
-  useSpeechRecognitionEvent('end', () => {
-    if (!wantListeningRef.current) {
-      setStatus('idle');
-      return;
-    }
-    if (elapsedRef.current >= maxSeconds) {
-      stopInternal(true);
-      return;
-    }
-    restartTimerRef.current = setTimeout(() => {
-      if (!wantListeningRef.current) return;
-      try {
-        startSpeechEngine();
-      } catch {
-        // ignore restart failure
-      }
-    }, 180);
-  });
-
-  useSpeechRecognitionEvent('result', (event) => {
-    const primary = event.results[0];
-    const chunk = primary?.transcript ?? '';
-    if (event.isFinal) {
-      const trimmed = chunk.trim();
-      if (trimmed) {
-        const alternatives = event.results.slice(1).map((r) => r.transcript).filter(Boolean);
-        const segments = (primary?.segments ?? []) as RecognitionSegment[];
-        const enriched = enrichRecognitionChunk(trimmed, alternatives, segments);
-        chunksRef.current = [
-          ...chunksRef.current,
-          { text: enriched, pauseBeforeMs: pendingPauseRef.current },
-        ];
-        pendingPauseRef.current = 0;
-        finalsRef.current = chunksRef.current.map((c) => c.text);
-        setFinalText(assembled(false));
-      }
-      interimRef.current = '';
-      setInterimText('');
-    } else {
-      interimRef.current = chunk;
-      setInterimText(chunk);
-    }
-  });
-
-  useSpeechRecognitionEvent('error', (event) => {
-    if (
-      event.error === 'no-speech' ||
-      event.error === 'speech-timeout' ||
-      event.error === 'aborted' ||
-      event.error === 'busy'
-    ) {
-      return;
-    }
-    if (event.error === 'not-allowed') {
-      wantListeningRef.current = false;
-      clearTimers();
-      abortSpeechEngine();
-      setStatus('denied');
-      setErrorMessage('Microphone permission was denied.');
-      return;
-    }
-    setErrorMessage(event.message || event.error);
-  });
-
-  useSpeechRecognitionEvent('speechend', () => {
-    lastSpeechEndRef.current = Date.now();
-  });
-
-  useSpeechRecognitionEvent('speechstart', () => {
-    if (lastSpeechEndRef.current) {
-      const gap = Date.now() - lastSpeechEndRef.current;
-      pendingPauseRef.current = Math.max(pendingPauseRef.current, gap);
-      if (gap >= 700) {
-        pausesRef.current += 1;
-        setPauses(pausesRef.current);
-      }
-    }
-  });
 
   useEffect(() => {
     return () => {
       wantListeningRef.current = false;
       clearTimers();
-      abortSpeechEngine();
+      stopEngine();
     };
-  }, [clearTimers]);
+  }, [clearTimers, stopEngine]);
 
   const beginListening = useCallback(async () => {
     setErrorMessage(null);
@@ -216,7 +241,7 @@ export function useSpeechCapture(options: Options = {}) {
       setStatus(access.reason === 'unsupported' ? 'unsupported' : 'denied');
       setErrorMessage(
         access.reason === 'unsupported'
-          ? 'Live speech works in Chrome, Edge, or Safari. Use a demo or type below.'
+          ? 'Live speech works in Chrome or Edge. Use a demo or type below.'
           : 'Allow the microphone to speak live — or use a demo sample.'
       );
       return false;
@@ -242,13 +267,7 @@ export function useSpeechCapture(options: Options = {}) {
       elapsedRef.current += 1;
       setElapsed(elapsedRef.current);
       const spoken = countSpokenWords(
-        polishSpokenTranscript(
-          joinTranscriptParts([...finalsRef.current, interimRef.current]),
-          chunksRef.current.length
-            ? [...chunksRef.current, { text: interimRef.current, pauseBeforeMs: 0 }]
-            : undefined,
-          { complete: false }
-        )
+        joinTranscriptParts([...finalsRef.current, interimRef.current])
       );
       const point: PacePoint = {
         t: elapsedRef.current,
@@ -263,21 +282,21 @@ export function useSpeechCapture(options: Options = {}) {
     }, 1000);
 
     try {
-      startSpeechEngine();
+      startEngine();
       return true;
     } catch {
       wantListeningRef.current = false;
       clearTimers();
       setStatus('unsupported');
-      setErrorMessage('Could not start speech recognition in this browser.');
+      setErrorMessage('Could not start speech recognition in this browser. Use Chrome or Edge.');
       return false;
     }
-  }, [clearTimers, maxSeconds, stopInternal]);
+  }, [clearTimers, maxSeconds, startEngine, stopInternal]);
 
   const startWithCountdown = useCallback(async () => {
     if (!isSpeechRecognitionAvailable()) {
       setStatus('unsupported');
-      setErrorMessage('Live speech works in Chrome, Edge, or Safari. Use a demo or type below.');
+      setErrorMessage('Live speech works in Chrome or Edge. Use a demo or type below.');
       return;
     }
 

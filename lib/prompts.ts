@@ -1,3 +1,5 @@
+import { EXTRA_PROMPTS } from '@/lib/promptPack';
+
 export type Goal = 'interview' | 'debate' | 'story' | 'pitch' | 'daily';
 
 export type Prompt = {
@@ -7,7 +9,7 @@ export type Prompt = {
   hints: string[];
 };
 
-export const PROMPTS: Prompt[] = [
+const CORE_PROMPTS: Prompt[] = [
   // Interview
   {
     id: 'int-1',
@@ -191,7 +193,128 @@ export const PROMPTS: Prompt[] = [
     text: 'Teach me something you know well in under two minutes.',
     hints: ['Assume I’m smart but new', 'One example', 'One common mistake'],
   },
+  {
+    id: 'int-7',
+    category: 'interview',
+    text: 'Tell me about a time you had to learn something fast with no one to ask.',
+    hints: ['Name the clock', 'Show how you learned', 'End with what you’d repeat'],
+  },
+  {
+    id: 'int-8',
+    category: 'interview',
+    text: 'What is a strength that used to get you in trouble — and how do you use it now?',
+    hints: ['Name the double edge', 'Give one scene', 'Show the control'],
+  },
+  {
+    id: 'int-9',
+    category: 'interview',
+    text: 'Walk me through how you handle feedback you disagree with.',
+    hints: ['Don’t get defensive', 'Show you heard it', 'Say what you did next'],
+  },
+  {
+    id: 'int-10',
+    category: 'interview',
+    text: 'Describe your working style in 60 seconds — how do people experience you?',
+    hints: ['Skip Myers-Briggs', 'One example of you in a crunch', 'Name a need you have'],
+  },
+  {
+    id: 'deb-6',
+    category: 'debate',
+    text: 'Should internships be paid, always? Defend your position.',
+    hints: ['Define the harm', 'One counterargument', 'A practical rule'],
+  },
+  {
+    id: 'deb-7',
+    category: 'debate',
+    text: 'Is “follow your passion” good advice for people in their twenties?',
+    hints: ['Don’t strawman', 'Use one real path', 'Land a nuanced close'],
+  },
+  {
+    id: 'deb-8',
+    category: 'debate',
+    text: 'Should schools ban phones during the day?',
+    hints: ['Pick a side fast', 'Address focus vs freedom', 'Propose a policy'],
+  },
+  {
+    id: 'sto-6',
+    category: 'story',
+    text: 'Tell the story of a compliment you didn’t believe — and what it changed.',
+    hints: ['Set the scene', 'Why you rejected it', 'What shifted later'],
+  },
+  {
+    id: 'sto-7',
+    category: 'story',
+    text: 'Recount a time you were the new person in the room.',
+    hints: ['The feeling, specifically', 'One choice you made', 'How it ended'],
+  },
+  {
+    id: 'sto-8',
+    category: 'story',
+    text: 'Tell a story about a meal that still lives in your head.',
+    hints: ['Sensory first', 'Who were you with?', 'Why it stuck'],
+  },
+  {
+    id: 'pit-6',
+    category: 'pitch',
+    text: 'Pitch a better morning routine to someone who hates routines.',
+    hints: ['Start with their objection', 'Make it tiny', 'One vivid payoff'],
+  },
+  {
+    id: 'pit-7',
+    category: 'pitch',
+    text: 'You have 45 seconds: sell me on a book, show, or podcast that changed you.',
+    hints: ['Who it’s for', 'The aha', 'The ask: try the first chapter'],
+  },
+  {
+    id: 'pit-8',
+    category: 'pitch',
+    text: 'Pitch why your team should try a weekly speaking rep like this one.',
+    hints: ['The cost of filler-heavy meetings', 'The 2-minute bar', 'A first experiment'],
+  },
+  {
+    id: 'day-9',
+    category: 'daily',
+    text: 'What are you pretending not to know?',
+    hints: ['Say it plainly', 'What would honesty cost?', 'One next move'],
+  },
+  {
+    id: 'day-10',
+    category: 'daily',
+    text: 'Describe a person you admire — without using the word “inspiring.”',
+    hints: ['One scene of them', 'What they do, not adjectives', 'What you borrowed'],
+  },
+  {
+    id: 'day-11',
+    category: 'daily',
+    text: 'If today were a chapter title, what would it be — and why?',
+    hints: ['Name the title', 'Two beats from the day', 'How it should end'],
+  },
+  {
+    id: 'day-12',
+    category: 'daily',
+    text: 'Explain a disagreement you had this week as if you were fair to both sides.',
+    hints: ['Their view first', 'Yours second', 'What you’d do differently'],
+  },
 ];
+
+export const PROMPTS: Prompt[] = [...CORE_PROMPTS, ...EXTRA_PROMPTS];
+
+export function getPromptById(id: string, extras: Prompt[] = []): Prompt | undefined {
+  return [...extras, ...PROMPTS].find((p) => p.id === id);
+}
+
+export function getRandomPrompt(category: Goal | 'all' = 'all', extras: Prompt[] = []): Prompt {
+  const pool =
+    category === 'all'
+      ? [...extras, ...PROMPTS]
+      : [...extras, ...PROMPTS].filter((p) => p.category === category);
+  const list = pool.length > 0 ? pool : PROMPTS;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+export function getAllPrompts(extras: Prompt[] = []): Prompt[] {
+  return [...extras, ...PROMPTS];
+}
 
 export const GOAL_LABELS: Record<Goal, string> = {
   interview: 'Interview',
@@ -233,7 +356,8 @@ export function getTodaysPrompt(goal: Goal = 'daily', date = new Date()): Prompt
   return mixed[dayIndex % mixed.length];
 }
 
-export function getPromptsByCategory(category: Goal | 'all'): Prompt[] {
-  if (category === 'all') return PROMPTS;
-  return PROMPTS.filter((p) => p.category === category);
+export function getPromptsByCategory(category: Goal | 'all', extras: Prompt[] = []): Prompt[] {
+  const all = [...extras, ...PROMPTS];
+  if (category === 'all') return all;
+  return all.filter((p) => p.category === category);
 }

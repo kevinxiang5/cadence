@@ -6,7 +6,19 @@
 
 ## Start here
 
-Read **[RUN.md](./RUN.md)** — it tells you exactly what to install and how to get Cadence on your phone or in the browser.
+Cadence is a website. No Expo Go, no Xcode.
+
+```bash
+cd ~/Projects/cadence
+npm install
+npm start
+```
+
+Open **http://localhost:8081** in Chrome or Edge. Allow the mic.
+
+To put it on the internet: `npx vercel`
+
+More detail: **[RUN.md](./RUN.md)**
 
 ## What’s in v1
 
@@ -19,4 +31,4 @@ Read **[RUN.md](./RUN.md)** — it tells you exactly what to install and how to 
 
 ## Stack
 
-Expo SDK 57 · Expo Router · TypeScript · Zustand · expo-speech-recognition
+Expo SDK 57 (web) · Expo Router · TypeScript · Zustand

@@ -50,8 +50,8 @@ export async function scheduleDailyReminder(hour: number, minute: number, name: 
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Cadence is ready',
-        body: `${name || 'Hey'}, your 2-minute speaking rep is waiting. Open → speak → one upgrade.`,
+        title: 'speac is ready',
+        body: `${name || 'Hey'}, two minutes. Open and speak.`,
         sound: true,
       },
       trigger: {

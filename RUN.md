@@ -1,140 +1,56 @@
-# Cadence v1.0.0 — how to run the app
+# Cadence — run it in Xcode
 
-**Cadence is a real mobile app** (Expo / React Native), version **1.0.0**  
-iOS build **1** · Android versionCode **1**
+The iOS project is already generated. Open this file in Xcode:
 
-Live speaking uses `expo-speech-recognition`, which needs a **native build**.  
-It will **not** fully work inside Expo Go.
+`ios/Cadence.xcworkspace`
+
+(not the `.xcodeproj`)
 
 ---
 
-## Mac / Xcode (what to run now)
+## First time on this Mac
 
-CocoaPods Homebrew auto-install is skipped. Use `--no-install`, then install pods yourself.
+Xcode is downloading the **iOS 26.5 Simulator** (about 8.5 GB). Let that finish — the laptop will get warm. You only do this once.
 
-In **Terminal** from the repo folder:
-
-```bash
-cd ~/Desktop/cadence
-git pull
-npm install
-
-# confirm CocoaPods works (ignore uuid deprecation warnings)
-pod --version
-
-# generate iOS project WITHOUT Homebrew
-npx expo prebuild --platform ios --no-install
-
-# install native iOS deps
-cd ios
-pod install
-cd ..
-
-open ios/*.xcworkspace
-```
-
-Then in **Xcode**:
-1. Pick a simulator, **or** plug in your iPhone and pick it
-2. Signing & Capabilities → select **your Apple team** (needed for a real phone)
-3. Hit **Run**
-4. In a second Terminal tab, keep Metro running:
+To open the project again later:
 
 ```bash
-cd ~/Desktop/cadence
-npx expo start
-```
-
-5. On the phone/simulator, allow **Microphone** + **Speech Recognition**
-
-Speech recognition is much more reliable on a **real iPhone** than the simulator.
-
-If `prebuild` left a half-broken `ios/` folder, wipe it and retry:
-
-```bash
-rm -rf ios
-npx expo prebuild --platform ios --no-install
-cd ios && pod install && cd ..
-open ios/*.xcworkspace
-```
-
-Shortcut after CocoaPods is already installed:
-
-```bash
-npx expo run:ios
+cd ~/Projects/cadence
+npm run ios:xcode
 ```
 
 ---
 
-## Option A — Phone app via EAS (cloud build)
+## In Xcode
 
-1. **Create a free Expo account** → https://expo.dev/signup  
-2. In a terminal:
+1. Plug in your iPhone **or** wait for a simulator to appear in the device list
+2. **Signing & Capabilities** → Team → add your Apple ID (free) and select it
+3. Hit **Run** (the play button)
 
-```bash
-cd cadence
-npm install
-npx eas-cli login
-npx eas init
-```
+If Xcode asks to trust the developer on your iPhone: Settings → General → VPN & Device Management → trust.
 
-3. Build:
-
-**Android:**
-```bash
-npm run build:dev:android
-```
-
-**iPhone:**
-- Apple Developer account ($99/year) for a device build
-- Then: `npm run build:dev:ios`
-
-4. After install:
-```bash
-npx expo start --dev-client
-```
-
-5. Allow **Microphone** + **Speech Recognition**.
+Allow **Microphone** and **Speech Recognition** when the app asks.
 
 ---
 
-## Option B — Browser (fastest to try coaching)
+## Keep Metro running
+
+In a second Terminal tab:
 
 ```bash
-cd cadence
-npm install
-npx expo start --web
+cd ~/Projects/cadence
+npm start
 ```
 
-Open **http://localhost:8081 in Chrome or Edge**.  
-Allow the mic → Speak now → talk → Stop & analyze.
+Leave that running while the app is open.
 
 ---
 
-## Option C — Demo with no mic
+## If the workspace is missing again
 
-**Speak now → “No mic? Try a demo sample” → Messy first take → Save**
+```bash
+cd ~/Projects/cadence
+npm run ios:xcode
+```
 
----
-
-## What I already set up for v1
-
-| Item | Value |
-|------|--------|
-| App name | Cadence |
-| Version | **1.0.0** |
-| iOS buildNumber | **1** |
-| Android versionCode | **1** |
-| Bundle / package | `com.cadence.speak` |
-| Icon / splash | Branded teal “C” |
-| Mic + speech permissions | Configured |
-| Daily reminder notifications | Configured |
-| EAS profiles | development / preview / production |
-
----
-
-## Daily habit after it’s installed
-
-1. Open Cadence  
-2. Speak today’s prompt (or prep 2–5 min first)  
-3. Get fillers / WPM / upgrades  
-4. Save → streak + XP update  
+That installs CocoaPods locally (no Homebrew compile) and reopens Xcode.

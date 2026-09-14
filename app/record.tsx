@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,11 +15,13 @@ import * as Haptics from 'expo-haptics';
 
 import { Button } from '@/components/Button';
 import { HighlightedTranscript } from '@/components/HighlightedTranscript';
+import { TourAnchor, TourScrollView } from '@/components/TourGuide';
 import { useSpeechCapture } from '@/hooks/useSpeechCapture';
 import { analyzeSpeech, previewSpeech } from '@/lib/analysis';
 import { getTodaysPrompt } from '@/lib/prompts';
 import { SAMPLE_ANSWERS } from '@/lib/samples';
 import { estimateDurationFromWords, MAX_SPEAK_SECONDS } from '@/lib/speech';
+import { restoreTranscript } from '@/lib/transcript';
 import { colors, fonts, radii } from '@/lib/theme';
 import { useCadenceStore } from '@/store/useCadenceStore';
 
@@ -30,15 +33,24 @@ export default function RecordScreen() {
   const profile = useCadenceStore((s) => s.profile);
   const startPractice = useCadenceStore((s) => s.startPractice);
   const setLastResult = useCadenceStore((s) => s.setLastResult);
+  const completeTourStep = useCadenceStore((s) => s.completeTourStep);
+  const quietTour = useCadenceStore((s) => s.quietTour);
+  const tourComplete = useCadenceStore((s) => s.tourComplete);
   const enemyWord = profile.enemyWord;
 
   const [showSamples, setShowSamples] = useState(false);
   const [manualEdit, setManualEdit] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [captured, setCaptured] = useState(false);
   const analyzingRef = useRef(false);
+  const capturedRef = useRef(false);
 
   useEffect(() => {
     if (active) return;
+    if (!tourComplete) {
+      router.replace('/(tabs)');
+      return;
+    }
     const fallback = lastPrompt ?? {
       promptId: getTodaysPrompt(profile.goal).id,
       promptText: getTodaysPrompt(profile.goal).text,
@@ -46,30 +58,39 @@ export default function RecordScreen() {
       prepMinutes: 0 as const,
     };
     startPractice(fallback);
-  }, [active, lastPrompt, profile.goal, startPractice]);
+  }, [active, lastPrompt, profile.goal, router, startPractice, tourComplete]);
 
   const promptText = active?.promptText ?? lastPrompt?.promptText ?? 'Speak your answer';
 
-  const goToResults = (text: string, durationSec: number, pauses?: number) => {
-    const cleaned = text.trim();
+  const goToResults = (
+    text: string,
+    durationSec: number,
+    pauses?: number,
+    paceSeries?: { t: number; words: number; wpm: number }[]
+  ) => {
+    if (!tourComplete && !capturedRef.current) return;
+    const cleaned = restoreTranscript(text.trim());
     if (!cleaned || analyzingRef.current) return;
     analyzingRef.current = true;
     setAnalyzing(true);
     const analysis = analyzeSpeech(cleaned, Math.max(durationSec, 1), {
       pauseCount: pauses,
+      paceSeries,
     });
     setLastResult(cleaned, analysis);
+    completeTourStep('record-mic');
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }
     router.replace('/results');
   };
 
+  const cap = active?.maxSeconds ?? lastPrompt?.maxSeconds ?? MAX_SPEAK_SECONDS;
   const speech = useSpeechCapture({
-    maxSeconds: MAX_SPEAK_SECONDS,
-    onAutoStop: ({ transcript, elapsed, pauses }) => {
+    maxSeconds: cap,
+    onAutoStop: ({ transcript, elapsed, pauses, paceSeries }) => {
       if (previewSpeech(transcript).wordCount >= 8) {
-        goToResults(transcript, elapsed, pauses);
+        goToResults(transcript, elapsed, pauses, paceSeries);
       }
     },
   });
@@ -82,28 +103,41 @@ export default function RecordScreen() {
   const listening = speech.status === 'listening';
   const countingDown = speech.status === 'countdown';
 
+  const startCapture = () => {
+    quietTour();
+    capturedRef.current = true;
+    setCaptured(true);
+    setManualEdit(false);
+    speech.startWithCountdown();
+  };
+
   const stopAndAnalyze = () => {
     const result = speech.stop();
     const text = (result.transcript || liveText).trim();
     if (previewSpeech(text).wordCount >= 6) {
-      goToResults(text, result.elapsed || speech.elapsed, result.pauses);
+      goToResults(text, result.elapsed || speech.elapsed, result.pauses, result.paceSeries);
       return;
     }
+    if (!tourComplete) return;
     setManualEdit(true);
   };
 
   const analyzeCurrent = () => {
+    if (!captured) return;
     const text = liveText.trim();
     if (!text) return;
     const duration =
       speech.elapsed >= 3 ? speech.elapsed : estimateDurationFromWords(preview.wordCount);
-    goToResults(text, duration, speech.pauses);
+    goToResults(text, duration, speech.pauses, speech.paceSeries);
   };
 
   const useSample = (id: string) => {
+    if (!tourComplete) return;
     const sample = SAMPLE_ANSWERS.find((s) => s.id === id);
     if (!sample) return;
     speech.stop();
+    capturedRef.current = true;
+    setCaptured(true);
     speech.setTranscriptOverride(sample.transcript);
     setManualEdit(true);
     setShowSamples(false);
@@ -112,24 +146,43 @@ export default function RecordScreen() {
 
   const mm = Math.floor(speech.elapsed / 60);
   const ss = (speech.elapsed % 60).toString().padStart(2, '0');
-  const remaining = Math.max(0, MAX_SPEAK_SECONDS - speech.elapsed);
+  const remaining = Math.max(0, cap - speech.elapsed);
+
+  const clockLabel = countingDown
+    ? 'Get ready'
+    : listening
+      ? `${mm}:${ss}`
+      : 'Press to start';
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20 }]}>
+    <KeyboardAvoidingView
+      style={[styles.root, { paddingTop: insets.top + 12 }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View style={styles.header}>
-        <Pressable
-          onPress={() => {
-            speech.stop();
-            router.back();
-          }}
-          hitSlop={12}
-        >
-          <Text style={styles.back}>← Back</Text>
-        </Pressable>
+        {tourComplete ? (
+          <Pressable
+            onPress={() => {
+              Keyboard.dismiss();
+              speech.stop();
+              router.back();
+            }}
+            hitSlop={12}
+          >
+            <Text style={styles.back}>← Back</Text>
+          </Pressable>
+        ) : (
+          <View />
+        )}
         <Text style={styles.cap}>{remaining}s left</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <TourScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      >
         <Text style={styles.prompt}>{promptText}</Text>
 
         {enemyWord ? (
@@ -149,17 +202,17 @@ export default function RecordScreen() {
         ) : null}
 
         <View style={styles.recArea}>
-          <Text style={styles.clock}>
-            {countingDown ? speech.countdown : `${mm}:${ss}`}
+          <Text style={[styles.clock, !listening && !countingDown && styles.clockIdle]}>
+            {clockLabel}
           </Text>
 
+          <TourAnchor id="record-mic">
           <Pressable
             onPress={() => {
               if (listening || countingDown) {
                 stopAndAnalyze();
               } else {
-                setManualEdit(false);
-                speech.startWithCountdown();
+                startCapture();
               }
             }}
             style={[
@@ -170,6 +223,7 @@ export default function RecordScreen() {
           >
             <Text style={styles.micGlyph}>{listening ? '■' : countingDown ? speech.countdown : '●'}</Text>
           </Pressable>
+          </TourAnchor>
 
           <Text style={styles.recStatus}>
             {analyzing
@@ -179,9 +233,13 @@ export default function RecordScreen() {
                 : listening
                   ? 'Listening — just speak'
                   : speech.status === 'denied'
-                    ? 'Mic blocked — allow it, or use a demo'
+                    ? tourComplete
+                      ? 'Mic blocked — allow it, or use a demo'
+                      : 'Mic blocked — allow it in Settings, then tap the circle'
                     : speech.status === 'unsupported'
-                      ? 'Live speech needs Chrome / Edge / Safari'
+                      ? tourComplete
+                        ? 'Live speech needs Chrome / Edge / Safari'
+                        : 'Allow the microphone, then tap the circle'
                       : 'Tap the mic and speak'}
           </Text>
 
@@ -198,8 +256,13 @@ export default function RecordScreen() {
         </View>
 
         {listening || countingDown ? (
-          <Button label="Stop & analyze" variant="copper" onPress={stopAndAnalyze} style={{ marginBottom: 16 }} />
-        ) : (
+          <Button
+            label="Stop"
+            variant="copper"
+            onPress={stopAndAnalyze}
+            style={{ marginBottom: 16 }}
+          />
+        ) : tourComplete ? (
           <Button
             label={speech.supported ? 'Start speaking' : 'Speech unavailable — use a demo'}
             onPress={() => {
@@ -207,20 +270,21 @@ export default function RecordScreen() {
                 setShowSamples(true);
                 return;
               }
-              setManualEdit(false);
-              speech.startWithCountdown();
+              startCapture();
             }}
             style={{ marginBottom: 12 }}
           />
-        )}
+        ) : null}
 
-        <Pressable onPress={() => setShowSamples((s) => !s)}>
-          <Text style={styles.demoLink}>
-            {showSamples ? 'Hide demo samples' : 'No mic? Try a demo sample →'}
-          </Text>
-        </Pressable>
+        {tourComplete ? (
+          <Pressable onPress={() => setShowSamples((s) => !s)}>
+            <Text style={styles.demoLink}>
+                {showSamples ? 'Hide demos' : 'No mic? Demo'}
+            </Text>
+          </Pressable>
+        ) : null}
 
-        {showSamples && (
+        {tourComplete && showSamples && (
           <View style={styles.samples}>
             {SAMPLE_ANSWERS.map((s) => (
               <Pressable key={s.id} style={styles.sampleCard} onPress={() => useSample(s.id)}>
@@ -231,48 +295,59 @@ export default function RecordScreen() {
           </View>
         )}
 
-        <Text style={styles.editLabel}>Live transcript</Text>
-        <Text style={styles.editHint}>
-          {listening
-            ? 'Words appear as you talk. Fillers are highlighted.'
-            : 'Edit anything that’s off, then analyze.'}
-        </Text>
+        {tourComplete || captured ? (
+          <>
+            <Text style={styles.editLabel}>Live transcript</Text>
+            <Text style={styles.editHint}>
+                {listening
+                ? 'Fillers highlight as you talk.'
+                : 'Fix anything that’s off, then analyze.'}
+            </Text>
 
-        {listening && !manualEdit ? (
-          <View style={styles.transcriptBox}>
-            {liveText ? (
-              <HighlightedTranscript
-                transcript={liveText}
-                fillerPositions={preview.fillerPositions}
-              />
+            {listening && !manualEdit ? (
+              <View style={styles.transcriptBox}>
+                {liveText ? (
+                  <HighlightedTranscript
+                    transcript={liveText}
+                    fillerPositions={preview.fillerPositions}
+                  />
+                ) : (
+                  <Text style={styles.placeholder}>Waiting for your voice…</Text>
+                )}
+              </View>
             ) : (
-              <Text style={styles.placeholder}>Waiting for your voice…</Text>
+              <TextInput
+                style={styles.transcriptInput}
+                multiline
+                value={liveText}
+                editable={tourComplete}
+                onChangeText={(t) => {
+                  if (!tourComplete) return;
+                  setManualEdit(true);
+                  speech.setTranscriptOverride(t);
+                }}
+                placeholder="Your words appear here…"
+                placeholderTextColor={colors.mutedLight}
+                textAlignVertical="top"
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={() => Keyboard.dismiss()}
+              />
             )}
-          </View>
-        ) : (
-          <TextInput
-            style={styles.transcriptInput}
-            multiline
-            value={liveText}
-            onChangeText={(t) => {
-              setManualEdit(true);
-              speech.setTranscriptOverride(t);
-            }}
-            placeholder="Your words appear here…"
-            placeholderTextColor={colors.mutedLight}
-            textAlignVertical="top"
-          />
-        )}
 
-        <Button
-          label={analyzing ? 'Analyzing…' : 'Analyze my speaking'}
-          onPress={analyzeCurrent}
-          disabled={!liveText.trim() || analyzing}
-          loading={analyzing}
-          style={{ marginTop: 8, marginBottom: 28 }}
-        />
-      </ScrollView>
-    </View>
+            {tourComplete ? (
+              <Button
+                label={analyzing ? 'Analyzing…' : 'Analyze'}
+                onPress={analyzeCurrent}
+                disabled={!captured || !liveText.trim() || analyzing}
+                loading={analyzing}
+                style={{ marginTop: 8, marginBottom: 28 }}
+              />
+            ) : null}
+          </>
+        ) : null}
+      </TourScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -297,7 +372,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.parchment,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
   },
   header: {
     flexDirection: 'row',
@@ -359,6 +434,11 @@ const styles = StyleSheet.create({
     fontSize: 48,
     color: colors.teal,
     marginBottom: 14,
+  },
+  clockIdle: {
+    fontSize: 22,
+    lineHeight: 28,
+    marginBottom: 16,
   },
   micBtn: {
     width: 88,

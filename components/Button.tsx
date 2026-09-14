@@ -1,14 +1,16 @@
 import { ReactNode } from 'react';
 import {
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
   TextStyle,
   ViewStyle,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Platform } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { colors, fonts, radii } from '@/lib/theme';
 
@@ -35,10 +37,16 @@ export function Button({
   textStyle,
   icon,
 }: Props) {
+  const scale = useSharedValue(1);
+  const anim = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   const handle = () => {
     if (disabled || loading) return;
+    Keyboard.dismiss();
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     }
     onPress();
   };
@@ -47,31 +55,43 @@ export function Button({
     <Pressable
       onPress={handle}
       disabled={disabled || loading}
-      style={({ pressed }) => [
-        styles.base,
-        styles[variant],
-        (disabled || loading) && styles.disabled,
-        pressed && !disabled && styles.pressed,
-        style,
-      ]}
+      onPressIn={() => {
+        if (disabled || loading) return;
+        scale.value = withSpring(0.96, { damping: 16, stiffness: 420 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 14, stiffness: 280 });
+      }}
     >
-      {loading ? (
-        <ActivityIndicator color={variant === 'primary' || variant === 'copper' ? colors.cream : colors.teal} />
-      ) : (
-        <>
-          {icon}
-          <Text style={[styles.label, styles[`${variant}Label` as const], textStyle]}>{label}</Text>
-        </>
-      )}
+      <Animated.View
+        style={[
+          styles.base,
+          styles[variant],
+          (disabled || loading) && styles.disabled,
+          style,
+          anim,
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator
+            color={variant === 'primary' || variant === 'copper' ? colors.cream : colors.teal}
+          />
+        ) : (
+          <>
+            {icon}
+            <Text style={[styles.label, styles[`${variant}Label` as const], textStyle]}>{label}</Text>
+          </>
+        )}
+      </Animated.View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 54,
+    minHeight: 56,
     borderRadius: radii.md,
-    paddingHorizontal: 22,
+    paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -93,10 +113,6 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.45,
-  },
-  pressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.985 }],
   },
   label: {
     fontFamily: fonts.bodyBold,

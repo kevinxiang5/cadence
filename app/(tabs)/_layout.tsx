@@ -1,18 +1,80 @@
+import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, fonts } from '@/lib/theme';
+import { useCadenceStore } from '@/store/useCadenceStore';
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Today: '◉',
-    Routine: '◷',
-    Stats: '△',
-    Library: '☰',
+const TABS: { name: string; label: string; icon: SFSymbol }[] = [
+  { name: 'index', label: 'Today', icon: 'text.quote' },
+  { name: 'routine', label: 'Coach', icon: 'waveform' },
+  { name: 'stats', label: 'Stats', icon: 'chart.bar' },
+  { name: 'library', label: 'Library', icon: 'books.vertical' },
+];
+
+function CadenceTabBar({
+  state,
+  navigation,
+}: {
+  state: { index: number; routes: { key: string; name: string; params?: object }[] };
+  navigation: {
+    emit: (e: { type: string; target: string; canPreventDefault?: boolean }) => {
+      defaultPrevented: boolean;
+    };
+    navigate: (name: string, params?: object) => void;
   };
+}) {
+  const insets = useSafeAreaInsets();
+  const tourComplete = useCadenceStore((s) => s.tourComplete);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  if (keyboardOpen || !tourComplete) return null;
+
   return (
-    <View style={styles.iconWrap}>
-      <Text style={[styles.icon, focused && styles.iconFocused]}>{icons[label] ?? '•'}</Text>
+    <View style={[styles.bar, { bottom: Math.max(insets.bottom, 10) + 10 }]}>
+      {state.routes.map((route, index) => {
+        const meta = TABS.find((tab) => tab.name === route.name);
+        if (!meta) return null;
+        const focused = state.index === index;
+        const color = focused ? colors.teal : colors.mutedLight;
+
+        return (
+          <Pressable
+            key={route.key}
+            accessibilityRole="button"
+            accessibilityState={{ selected: focused }}
+            onPress={() => {
+              const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              });
+              if (!focused && !event.defaultPrevented) {
+                navigation.navigate(route.name, route.params);
+              }
+            }}
+            style={styles.item}
+          >
+            <View style={styles.iconBox}>
+              <SymbolView name={meta.icon} size={20} weight="medium" tintColor={color} />
+            </View>
+            <Text style={[styles.label, { color }]}>{meta.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -20,66 +82,56 @@ function TabIcon({ label, focused }: { label: string; focused: boolean }) {
 export default function TabLayout() {
   return (
     <Tabs
+      tabBar={(props) => <CadenceTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.teal,
-        tabBarInactiveTintColor: colors.mutedLight,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarBackground: () => <View style={styles.tabBg} />,
+        animation: 'shift',
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Today',
-          tabBarIcon: ({ focused }) => <TabIcon label="Today" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="routine"
-        options={{
-          title: 'Routine',
-          tabBarIcon: ({ focused }) => <TabIcon label="Routine" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="stats"
-        options={{
-          title: 'Stats',
-          tabBarIcon: ({ focused }) => <TabIcon label="Stats" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="library"
-        options={{
-          title: 'Library',
-          tabBarIcon: ({ focused }) => <TabIcon label="Library" focused={focused} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'Today' }} />
+      <Tabs.Screen name="routine" options={{ title: 'Coach' }} />
+      <Tabs.Screen name="stats" options={{ title: 'Stats' }} />
+      <Tabs.Screen name="library" options={{ title: 'Library' }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
+  bar: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    height: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.cream,
-    borderTopColor: colors.cardBorder,
-    borderTopWidth: 1,
-    height: 68,
-    paddingTop: 6,
-    paddingBottom: 8,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
-  tabBg: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: colors.cream,
+  item: {
+    flex: 1,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
-  tabLabel: {
+  iconBox: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  label: {
     fontFamily: fonts.bodyMedium,
     fontSize: 11,
-    letterSpacing: 0.3,
+    lineHeight: 14,
+    letterSpacing: 0.2,
+    textAlign: 'center',
   },
-  iconWrap: { alignItems: 'center', justifyContent: 'center' },
-  icon: { fontSize: 16, color: colors.mutedLight },
-  iconFocused: { color: colors.teal },
 });

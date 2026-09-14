@@ -3,7 +3,15 @@ import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 
 export const MAX_SPEAK_SECONDS = 90;
 
+export function getWebSpeechRecognitionCtor(): (new () => SpeechRecognition) | null {
+  if (typeof window === 'undefined') return null;
+  return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
+}
+
 export function isSpeechRecognitionAvailable(): boolean {
+  if (Platform.OS === 'web') {
+    return getWebSpeechRecognitionCtor() !== null;
+  }
   try {
     return ExpoSpeechRecognitionModule.isRecognitionAvailable();
   } catch {
@@ -54,11 +62,25 @@ export function startSpeechEngine() {
       lang: 'en-US',
       interimResults: true,
       continuous: true,
-      maxAlternatives: 1,
+      maxAlternatives: 5,
       addsPunctuation: true,
+      iosTaskHint: 'dictation',
       contextualStrings: [
         'um',
+        'umm',
+        'ummm',
         'uh',
+        'uhh',
+        'uhhh',
+        'uhm',
+        'uh huh',
+        'uh-huh',
+        'ah',
+        'ahh',
+        'er',
+        'erm',
+        'hmm',
+        'hum',
         'like',
         'basically',
         'you know',
@@ -67,6 +89,8 @@ export function startSpeechEngine() {
         'literally',
         'kind of',
         'sort of',
+        'um um',
+        'uh uh',
       ],
       volumeChangeEventOptions: {
         enabled: Platform.OS !== 'web',

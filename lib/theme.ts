@@ -41,6 +41,14 @@ export const radii = {
   pill: 999,
 };
 
+export const layout = {
+  screenPad: 22,
+  cardPad: 16,
+  stackGap: 14,
+  sectionGap: 14,
+  tabClearance: 118,
+};
+
 export const fonts = {
   display: 'Fraunces_600SemiBold',
   displayBold: 'Fraunces_700Bold',

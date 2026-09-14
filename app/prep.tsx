@@ -1,8 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -41,6 +44,7 @@ export default function PrepScreen() {
 
   const goRecord = () => {
     if (finished) return;
+    Keyboard.dismiss();
     setFinished(true);
     setNotes(notes);
     router.replace('/record');
@@ -64,9 +68,18 @@ export default function PrepScreen() {
   const progress = 1 - remaining / (minutes * 60);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20 }]}>
+    <KeyboardAvoidingView
+      style={[styles.root, { paddingTop: insets.top + 12 }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          onPress={() => {
+            Keyboard.dismiss();
+            router.back();
+          }}
+          hitSlop={12}
+        >
           <Text style={styles.back}>← Back</Text>
         </Pressable>
         <Text style={styles.headerLabel}>Prep · {minutes} min</Text>
@@ -75,40 +88,49 @@ export default function PrepScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.timerWrap}>
-        <View style={styles.ring}>
-          <View style={[styles.ringFill, { opacity: 0.15 + progress * 0.5 }]} />
-          <Text style={styles.timer}>
-            {mm}:{ss}
-          </Text>
+      <ScrollView
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 20, flexGrow: 1 }}
+      >
+        <View style={styles.timerWrap}>
+          <View style={styles.ring}>
+            <View style={[styles.ringFill, { opacity: 0.15 + progress * 0.5 }]} />
+            <Text style={styles.timer}>
+              {mm}:{ss}
+            </Text>
+          </View>
+          <Text style={styles.timerHint}>Scratch notes. Then speak.</Text>
         </View>
-        <Text style={styles.timerHint}>Scratch notes. Then speak.</Text>
-      </View>
 
-      <Text style={styles.prompt} numberOfLines={3}>
-        {promptText}
-      </Text>
+        <Text style={styles.prompt} numberOfLines={3}>
+          {promptText}
+        </Text>
 
-      <View style={styles.hints}>
-        {hints.slice(0, 3).map((h, i) => (
-          <Text key={i} style={styles.hint}>
-            · {h}
-          </Text>
-        ))}
-      </View>
+        <View style={styles.hints}>
+          {hints.slice(0, 3).map((h, i) => (
+            <Text key={i} style={styles.hint}>
+              · {h}
+            </Text>
+          ))}
+        </View>
 
-      <TextInput
-        style={styles.notes}
-        multiline
-        placeholder="Bullet your beats here…"
-        placeholderTextColor={colors.mutedLight}
-        value={notes}
-        onChangeText={setLocalNotes}
-        textAlignVertical="top"
-      />
+        <TextInput
+          style={styles.notes}
+          multiline
+          placeholder="Bullet your beats here…"
+          placeholderTextColor={colors.mutedLight}
+          value={notes}
+          onChangeText={setLocalNotes}
+          textAlignVertical="top"
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={() => Keyboard.dismiss()}
+        />
 
-      <Button label="I'm ready — record" onPress={goRecord} />
-    </View>
+        <Button label="Record" onPress={goRecord} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -116,7 +138,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.parchment,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
   },
   header: {
     flexDirection: 'row',
@@ -175,7 +197,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   notes: {
-    flex: 1,
+    minHeight: 140,
     backgroundColor: colors.cream,
     borderRadius: radii.lg,
     borderWidth: 1,
@@ -186,6 +208,5 @@ const styles = StyleSheet.create({
     color: colors.ink,
     lineHeight: 24,
     marginBottom: 16,
-    minHeight: 120,
   },
 });

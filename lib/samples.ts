@@ -34,6 +34,14 @@ export const SAMPLE_ANSWERS: SampleAnswer[] = [
       "Uh so like I mean the thing is you know basically I want this job because um like I really care about the mission and uh you know I think I would be a good fit. Like I've done a lot of similar work and basically um I learn fast. You know I mean I'm kind of the person who like shows up and actually gets things done.",
   },
   {
+    id: 'asr-raw',
+    label: 'How the mic often hears you',
+    description: 'No periods, swallowed ums written as “a” — what Apple ASR often returns.',
+    durationSec: 38,
+    transcript:
+      "a I think we should umm go with the first option because uhh it is a good plan and a we can start next week but I I need a day to get the stuff ready",
+  },
+  {
     id: 'story',
     label: 'Storytelling sample',
     description: 'Narrative with some weak vocabulary.',

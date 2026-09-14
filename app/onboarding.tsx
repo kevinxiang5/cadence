@@ -2,16 +2,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-  Pressable,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { Logo } from '@/components/Logo';
+import { PressScale } from '@/components/PressScale';
 import { scheduleDailyReminder, formatReminderTime } from '@/lib/notifications';
 import { GOAL_LABELS, type Goal } from '@/lib/prompts';
 import { colors, fonts, radii } from '@/lib/theme';
@@ -40,15 +45,17 @@ export default function OnboardingScreen() {
   const [minute, setMinute] = useState(0);
 
   const title = useMemo(() => {
-    if (step === 0) return 'What should we call you?';
-    if (step === 1) return 'What are you training for?';
-    return 'When should Cadence show up?';
+    if (step === 0) return 'Two minutes a day.';
+    if (step === 1) return 'Your name';
+    if (step === 2) return 'What’s the focus?';
+    return 'Daily reminder';
   }, [step]);
 
   const subtitle = useMemo(() => {
-    if (step === 0) return 'A first name is enough. This stays on your device.';
-    if (step === 1) return 'We’ll bias today’s prompt toward this — you can switch anytime.';
-    return 'Pick a time that already exists in your day. Habit > willpower.';
+    if (step === 0) return 'Prompt. Speak. Get coached — on this phone.';
+    if (step === 1) return 'Stays on this device.';
+    if (step === 2) return 'Change this anytime.';
+    return 'Pick a time you already have.';
   }, [step]);
 
   const finish = async () => {
@@ -63,108 +70,149 @@ export default function OnboardingScreen() {
 
   return (
     <LinearGradient colors={[colors.parchment, colors.parchmentDeep]} style={styles.root}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
           { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 },
         ]}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="on-drag"
       >
-        <Text style={styles.brand}>Cadence</Text>
+        <View style={styles.brandRow}>
+          <Logo size={56} />
+          <Text style={styles.brand}>speac</Text>
+        </View>
         <View style={styles.progressRow}>
-          {[0, 1, 2].map((i) => (
+          {[0, 1, 2, 3].map((i) => (
             <View key={i} style={[styles.dot, i <= step && styles.dotActive]} />
           ))}
         </View>
 
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <Animated.View key={step} entering={FadeInDown.duration(280)} exiting={FadeOut.duration(140)}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
 
-        {step === 0 && (
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Your name"
-            placeholderTextColor={colors.mutedLight}
-            style={styles.input}
-            autoFocus
-            returnKeyType="next"
-            onSubmitEditing={() => name.trim() && setStep(1)}
-          />
-        )}
+          {step === 0 && (
+            <View style={styles.howList}>
+              <HowRow n="1" text="Prompt" />
+              <HowRow n="2" text="Speak" />
+              <HowRow n="3" text="Score" />
+            </View>
+          )}
 
-        {step === 1 && (
-          <View style={styles.goalGrid}>
-            {GOALS.map((g) => (
-              <Pressable
-                key={g}
-                onPress={() => setGoal(g)}
-                style={[styles.goalChip, goal === g && styles.goalChipActive]}
-              >
-                <Text style={[styles.goalText, goal === g && styles.goalTextActive]}>
-                  {GOAL_LABELS[g]}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+          {step === 1 && (
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Your name"
+              placeholderTextColor={colors.mutedLight}
+              style={styles.input}
+              autoFocus
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={() => {
+                Keyboard.dismiss();
+                if (name.trim()) setStep(2);
+              }}
+            />
+          )}
 
-        {step === 2 && (
-          <View style={styles.timeGrid}>
-            {TIMES.map((t) => {
-              const active = t.hour === hour && t.minute === minute;
-              return (
-                <Pressable
-                  key={t.label}
-                  onPress={() => {
-                    setHour(t.hour);
-                    setMinute(t.minute);
-                  }}
-                  style={[styles.timeChip, active && styles.timeChipActive]}
-                >
-                  <Text style={[styles.timeText, active && styles.timeTextActive]}>{t.label}</Text>
-                </Pressable>
-              );
-            })}
-            <Text style={styles.timeHint}>
-              Reminder set for {formatReminderTime(hour, minute)}. You can change this in Routine.
-            </Text>
-          </View>
-        )}
+          {step === 2 && (
+            <View style={styles.goalGrid}>
+              {GOALS.map((g, index) => (
+                <Animated.View key={g} entering={FadeIn.delay(40 * index).duration(220)}>
+                  <PressScale onPress={() => setGoal(g)}>
+                    <View style={[styles.goalChip, goal === g && styles.goalChipActive]}>
+                      <Text style={[styles.goalText, goal === g && styles.goalTextActive]}>
+                        {GOAL_LABELS[g]}
+                      </Text>
+                    </View>
+                  </PressScale>
+                </Animated.View>
+              ))}
+            </View>
+          )}
+
+          {step === 3 && (
+            <View style={styles.timeGrid}>
+              {TIMES.map((t, index) => {
+                const active = t.hour === hour && t.minute === minute;
+                return (
+                  <Animated.View key={t.label} entering={FadeIn.delay(30 * index).duration(200)}>
+                    <PressScale
+                      onPress={() => {
+                        setHour(t.hour);
+                        setMinute(t.minute);
+                      }}
+                    >
+                      <View style={[styles.timeChip, active && styles.timeChipActive]}>
+                        <Text style={[styles.timeText, active && styles.timeTextActive]}>
+                          {t.label}
+                        </Text>
+                      </View>
+                    </PressScale>
+                  </Animated.View>
+                );
+              })}
+              <Text style={styles.timeHint}>{formatReminderTime(hour, minute)} · change in Coach</Text>
+            </View>
+          )}
+        </Animated.View>
 
         <View style={styles.footer}>
           {step > 0 && (
             <Button label="Back" variant="ghost" onPress={() => setStep((s) => s - 1)} />
           )}
-          {step < 2 ? (
+          {step < 3 ? (
             <Button
               label="Continue"
               onPress={() => setStep((s) => s + 1)}
-              disabled={step === 0 && !name.trim()}
+              disabled={step === 1 && !name.trim()}
               style={{ flex: 1 }}
             />
           ) : (
-            <Button label="Start my first day" variant="copper" onPress={finish} style={{ flex: 1 }} />
+            <Button label="Let’s go" variant="copper" onPress={finish} style={{ flex: 1 }} />
           )}
         </View>
 
         <Text style={styles.tagline}>
-          Duolingo for speaking — 2 minutes that make you sharper.
+          Speech stays here. No account.
         </Text>
       </ScrollView>
+      </KeyboardAvoidingView>
     </LinearGradient>
+  );
+}
+
+function HowRow({ n, text }: { n: string; text: string }) {
+  return (
+    <View style={styles.howRow}>
+      <View style={styles.howN}>
+        <Text style={styles.howNText}>{n}</Text>
+      </View>
+      <Text style={styles.howText}>{text}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { paddingHorizontal: 24, flexGrow: 1 },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 24,
+  },
   brand: {
     fontFamily: fonts.displayBold,
     fontSize: 34,
     color: colors.teal,
     letterSpacing: -0.5,
-    marginBottom: 20,
   },
   progressRow: { flexDirection: 'row', gap: 8, marginBottom: 36 },
   dot: {
@@ -252,6 +300,18 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     paddingTop: 24,
   },
+  howList: { gap: 12, marginBottom: 12 },
+  howRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  howN: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  howNText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.cream },
+  howText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.ink, flex: 1 },
   tagline: {
     fontFamily: fonts.body,
     fontSize: 13,

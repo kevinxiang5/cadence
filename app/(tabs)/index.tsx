@@ -1,14 +1,17 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { PressScale } from '@/components/PressScale';
 import { StreakBadge } from '@/components/HighlightedTranscript';
-import { GOAL_LABELS, getTodaysPrompt } from '@/lib/prompts';
+import { TourAnchor, TourScrollView } from '@/components/TourGuide';
 import { localTodayKey } from '@/lib/dates';
-import { colors, fonts, radii } from '@/lib/theme';
+import { GOAL_LABELS, getPromptById, getTodaysPrompt } from '@/lib/prompts';
+import { colors, fonts, layout, radii } from '@/lib/theme';
+import { getDailyChallenge } from '@/lib/warmups';
 import { useCadenceStore } from '@/store/useCadenceStore';
 
 export default function TodayScreen() {
@@ -18,18 +21,36 @@ export default function TodayScreen() {
   const streak = useCadenceStore((s) => s.streak);
   const xp = useCadenceStore((s) => s.xp);
   const lastPracticeDate = useCadenceStore((s) => s.lastPracticeDate);
+  const sessions = useCadenceStore((s) => s.sessions);
   const startPractice = useCadenceStore((s) => s.startPractice);
+  const completeTourStep = useCadenceStore((s) => s.completeTourStep);
+  const tourComplete = useCadenceStore((s) => s.tourComplete);
+  const toggleFavorite = useCadenceStore((s) => s.toggleFavorite);
+  const favoritePromptIds = useCadenceStore((s) => s.favoritePromptIds) ?? [];
+  const customPrompts = useCadenceStore((s) => s.customPrompts) ?? [];
+  const [showHints, setShowHints] = useState(false);
 
   const prompt = useMemo(() => getTodaysPrompt(profile.goal), [profile.goal]);
+  const catalogHints = useMemo(
+    () => getPromptById(prompt.id, customPrompts)?.hints ?? [],
+    [prompt.id, customPrompts]
+  );
+  const challenge = useMemo(() => getDailyChallenge(), []);
   const practicedToday = lastPracticeDate === localTodayKey();
+  const last = sessions[0];
+  const starred = favoritePromptIds.includes(prompt.id);
 
-  const begin = (prepMinutes: 0 | 2 | 5) => {
+  const begin = (
+    prepMinutes: 0 | 2,
+    override?: { promptId: string; promptText: string; category?: typeof prompt.category }
+  ) => {
     startPractice({
-      promptId: prompt.id,
-      promptText: prompt.text,
-      category: prompt.category,
+      promptId: override?.promptId ?? prompt.id,
+      promptText: override?.promptText ?? prompt.text,
+      category: override?.category ?? prompt.category,
       prepMinutes,
     });
+    completeTourStep('today-speak');
     if (prepMinutes === 0) {
       router.push('/record');
     } else {
@@ -38,147 +59,208 @@ export default function TodayScreen() {
   };
 
   return (
-    <LinearGradient colors={[colors.parchment, '#EDE6D8']} style={styles.root}>
-      <ScrollView
+    <LinearGradient colors={[colors.parchment, colors.parchmentDeep]} style={styles.root}>
+      <TourScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 },
+          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + layout.tabClearance },
         ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topRow}>
-          <View>
-            <Text style={styles.greeting}>
-              {practicedToday ? 'Nice work today,' : 'Ready when you are,'}
-            </Text>
-            <Text style={styles.name}>{profile.name || 'Speaker'}</Text>
-          </View>
           <StreakBadge streak={streak} />
+          <Text style={styles.brand}>speac</Text>
         </View>
 
-        <Text style={styles.brand}>Cadence</Text>
-        <Text style={styles.oneLiner}>Your 2-minute speaking rep.</Text>
+        <Text style={styles.todayLead}>
+          {practicedToday ? 'Done for today — go again anytime.' : 'Two minutes. Out loud.'}
+        </Text>
 
-        <View style={styles.promptBlock}>
+        {last && tourComplete ? (
+          <PressScale
+            onPress={() =>
+              begin(0, {
+                promptId: last.promptId,
+                promptText: last.promptText,
+                category: last.category,
+              })
+            }
+            style={styles.recap}
+          >
+            <Text style={styles.recapKicker}>Last take</Text>
+            <View style={styles.recapRow}>
+              <Text style={styles.recapScore}>{last.analysis.scores.overall}</Text>
+              <Text style={styles.recapMeta}>
+                {last.analysis.wpm} WPM · {last.analysis.fillerCount} fillers · {xp} XP
+              </Text>
+            </View>
+          </PressScale>
+        ) : null}
+
+        <TourAnchor id="today-prompt">
+        <View style={styles.card}>
           <View style={styles.metaRow}>
-            <Text style={styles.category}>{GOAL_LABELS[prompt.category]}</Text>
-            <Text style={styles.xp}>{xp} XP</Text>
+            <Text style={styles.category}>
+              {sessions.length === 0 ? 'Your first prompt' : GOAL_LABELS[prompt.category]}
+            </Text>
+            <PressScale onPress={() => toggleFavorite(prompt.id)}>
+              <Text style={[styles.star, starred && styles.starOn]}>{starred ? '★' : '☆'}</Text>
+            </PressScale>
           </View>
           <Text style={styles.prompt}>{prompt.text}</Text>
+          {tourComplete && catalogHints.length > 0 ? (
+            <PressScale onPress={() => setShowHints((s) => !s)}>
+              <Text style={styles.hintToggle}>{showHints ? 'Hide beats' : 'Show 3 beats'}</Text>
+            </PressScale>
+          ) : null}
+          {tourComplete && showHints
+            ? catalogHints.slice(0, 3).map((h) => (
+                <Text key={h} style={styles.hintLine}>
+                  · {h}
+                </Text>
+              ))
+            : null}
+        </View>
+        </TourAnchor>
+
+        <View style={styles.actions}>
+          <TourAnchor id="today-speak">
+            <Button label={practicedToday && tourComplete ? 'Go again' : 'Speak now'} onPress={() => begin(0)} />
+          </TourAnchor>
+          {tourComplete ? (
+            <Button label="Prep 2 min" variant="secondary" onPress={() => begin(2)} />
+          ) : null}
         </View>
 
-        {practicedToday ? (
-          <View style={styles.doneCard}>
-            <Text style={styles.doneTitle}>Today’s rep is in.</Text>
-            <Text style={styles.doneBody}>
-              Come back tomorrow — or open the Library for an extra round.
-            </Text>
-            <Button
-              label="Practice another prompt"
-              variant="secondary"
-              onPress={() => router.push('/(tabs)/library')}
-              style={{ marginTop: 14 }}
-            />
-            <Button
-              label="Speak this prompt again"
-              variant="ghost"
-              onPress={() => begin(0)}
-              style={{ marginTop: 4 }}
-            />
-            <Button
-              label="See your stats"
-              variant="ghost"
-              onPress={() => router.push('/(tabs)/stats')}
-              style={{ marginTop: 4 }}
-            />
-          </View>
-        ) : (
-          <View style={styles.actions}>
-            <Button label="Speak now" onPress={() => begin(0)} />
-            <Button label="Prep for 2 minutes" variant="secondary" onPress={() => begin(2)} />
-            <Button label="Prep for 5 minutes" variant="ghost" onPress={() => begin(5)} />
-          </View>
-        )}
+        {tourComplete ? (
+          <>
+            <Text style={styles.moreLabel}>Challenge</Text>
 
-        <Text style={styles.footerHint}>
-          Open → speak → one clear upgrade. That’s the whole ritual.
-        </Text>
-      </ScrollView>
+            <PressScale
+              onPress={() =>
+                begin(0, {
+                  promptId: challenge.id,
+                  promptText: challenge.promptText,
+                  category: challenge.category,
+                })
+              }
+              style={styles.challenge}
+            >
+              <Text style={styles.category}>Daily challenge</Text>
+              <Text style={styles.challengeTitle}>{challenge.title}</Text>
+              <Text style={styles.drillBody}>{challenge.body}</Text>
+            </PressScale>
+          </>
+        ) : null}
+      </TourScrollView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { paddingHorizontal: 24, flexGrow: 1 },
+  scroll: { paddingHorizontal: layout.screenPad, gap: layout.stackGap },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 28,
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  greeting: {
+  todayLead: {
     fontFamily: fonts.body,
     fontSize: 14,
     color: colors.muted,
-  },
-  name: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 18,
-    color: colors.inkSoft,
-    marginTop: 2,
+    lineHeight: 20,
+    marginTop: -4,
   },
   brand: {
     fontFamily: fonts.displayBold,
-    fontSize: 48,
+    fontSize: 28,
     color: colors.teal,
-    letterSpacing: -1.2,
+    letterSpacing: -0.6,
+  },
+  recap: {
+    backgroundColor: colors.cream,
+    borderRadius: radii.lg,
+    padding: layout.cardPad,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  recapKicker: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.copper,
     marginBottom: 6,
   },
-  oneLiner: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.muted,
-    marginBottom: 36,
+  recapRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  recapScore: {
+    fontFamily: fonts.displayBold,
+    fontSize: 28,
+    color: colors.teal,
   },
-  promptBlock: {
-    marginBottom: 36,
+  recapMeta: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+  },
+  card: {
+    backgroundColor: colors.cream,
+    borderRadius: radii.lg,
+    padding: layout.cardPad,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
   },
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   category: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    letterSpacing: 1.4,
+    fontSize: 11,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: colors.tealLight,
+    marginBottom: 8,
   },
-  xp: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 13,
-    color: colors.copper,
-  },
+  star: { fontSize: 22, color: colors.mutedLight, marginTop: -4 },
+  starOn: { color: colors.copper },
   prompt: {
     fontFamily: fonts.display,
-    fontSize: 26,
-    lineHeight: 36,
+    fontSize: 20,
+    lineHeight: 28,
     color: colors.ink,
   },
-  actions: { gap: 12 },
-  doneCard: {
-    backgroundColor: colors.successSoft,
-    borderRadius: radii.lg,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(45, 106, 79, 0.15)',
+  hintToggle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.tealMid,
+    marginTop: 12,
   },
+  hintLine: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.tealMid,
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  moreLabel: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.muted,
+    marginTop: 8,
+  },
+  actions: { gap: 12 },
   doneTitle: {
     fontFamily: fonts.display,
-    fontSize: 22,
+    fontSize: 20,
     color: colors.success,
     marginBottom: 6,
   },
@@ -188,12 +270,50 @@ const styles = StyleSheet.create({
     color: colors.inkSoft,
     lineHeight: 22,
   },
-  footerHint: {
-    marginTop: 'auto',
-    paddingTop: 40,
+  challenge: {
+    backgroundColor: colors.cream,
+    borderRadius: radii.lg,
+    padding: layout.cardPad,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  challengeTitle: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    color: colors.ink,
+    marginBottom: 4,
+  },
+  word: {
+    fontFamily: fonts.displayBold,
+    fontSize: 28,
+    color: colors.ink,
+    marginBottom: 4,
+  },
+  wordMeaning: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.muted,
+    lineHeight: 22,
+    marginBottom: 14,
+  },
+  warmup: {
+    backgroundColor: colors.cream,
+    borderRadius: radii.lg,
+    padding: layout.cardPad,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  drillTitle: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 16,
+    lineHeight: 20,
+    color: colors.ink,
+    marginBottom: 6,
+  },
+  drillBody: {
     fontFamily: fonts.body,
     fontSize: 13,
-    color: colors.mutedLight,
-    textAlign: 'center',
+    lineHeight: 18,
+    color: colors.muted,
   },
 });

@@ -13,7 +13,7 @@ export function Card({ children, style, padded = true }: Props) {
   return <View style={[styles.card, padded && styles.padded, style]}>{children}</View>;
 }
 
-export function SectionLabel({ children }: { children: string }) {
+export function SectionLabel({ children }: { children: ReactNode }) {
   return <Text style={styles.section}>{children}</Text>;
 }
 
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
   },
   padded: {
-    padding: 18,
+    padding: 22,
   },
   section: {
     fontFamily: fonts.bodyMedium,

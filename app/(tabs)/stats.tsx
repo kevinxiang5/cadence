@@ -1,10 +1,15 @@
 import { format, parseISO } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, SectionLabel } from '@/components/Card';
+import { TourAnchor, TourScrollView } from '@/components/TourGuide';
+import { WpmChart } from '@/components/WpmChart';
+import { synthesizePace } from '@/lib/pace';
+import { getBadges } from '@/lib/badges';
 import { GOAL_LABELS } from '@/lib/prompts';
 import { formatDuration, getDetailedStats } from '@/lib/stats';
 import { colors, fonts, radii } from '@/lib/theme';
@@ -21,14 +26,22 @@ const SKILL_ROWS: { key: keyof ReturnType<typeof getDetailedStats>['skills']; la
 
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const startPractice = useCadenceStore((s) => s.startPractice);
   const sessions = useCadenceStore((s) => s.sessions);
   const streak = useCadenceStore((s) => s.streak);
   const longestStreak = useCadenceStore((s) => s.longestStreak);
   const xp = useCadenceStore((s) => s.xp);
   const enemyWord = useCadenceStore((s) => s.profile.enemyWord);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [pane, setPane] = useState<'now' | 'more'>('now');
 
   const stats = useMemo(() => getDetailedStats(sessions, xp), [sessions, xp]);
+  const badges = useMemo(
+    () => getBadges({ sessions, streak, longestStreak, xp }),
+    [sessions, streak, longestStreak, xp]
+  );
+  const earnedCount = badges.filter((b) => b.earned).length;
   const maxWeek = Math.max(1, ...stats.week.map((d) => d.count));
   const maxFiller = Math.max(1, ...stats.topFillers.map((f) => f.count));
   const maxCat = Math.max(1, ...stats.byCategory.map((c) => c.count));
@@ -40,22 +53,30 @@ export default function StatsScreen() {
         ? `↓ ${stats.trendDelta} vs earlier`
         : stats.trend === 'flat'
           ? '→ Holding steady'
-          : 'Start a session to track trend';
+          : 'Speak to start';
 
   return (
     <LinearGradient colors={[colors.parchment, colors.parchmentDeep]} style={styles.root}>
-      <ScrollView
+      <TourScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + 20,
-          paddingBottom: insets.bottom + 40,
-          paddingHorizontal: 24,
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 124,
+          paddingHorizontal: 28,
         }}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>Stats</Text>
-        <Text style={styles.sub}>Your speaking sharpness, measured.</Text>
 
-        {/* Level + XP */}
+        <View style={styles.switchRow}>
+          <Pressable onPress={() => setPane('now')} style={[styles.switchBtn, pane === 'now' && styles.switchOn]}>
+            <Text style={[styles.switchText, pane === 'now' && styles.switchTextOn]}>Now</Text>
+          </Pressable>
+          <Pressable onPress={() => setPane('more')} style={[styles.switchBtn, pane === 'more' && styles.switchOn]}>
+            <Text style={[styles.switchText, pane === 'more' && styles.switchTextOn]}>More</Text>
+          </Pressable>
+        </View>
+
+        <TourAnchor id="stats-overview">
         <Card style={{ marginBottom: 14 }}>
           <View style={styles.levelRow}>
             <View>
@@ -74,40 +95,30 @@ export default function StatsScreen() {
           </View>
           <Text style={styles.trend}>{trendLabel}</Text>
         </Card>
+        </TourAnchor>
 
-        {/* Hero metrics */}
+        {pane === 'now' ? (
+          <>
         <View style={styles.heroStats}>
           <HeroStat value={streak} label="Streak" accent={colors.copper} />
           <HeroStat value={longestStreak} label="Best streak" accent={colors.teal} />
           <HeroStat value={stats.totalSessions} label="Sessions" accent={colors.tealMid} />
         </View>
 
-        {/* Speaking metrics */}
         <Card style={{ marginBottom: 14 }}>
-          <SectionLabel>Speaking metrics</SectionLabel>
+          <SectionLabel>This week</SectionLabel>
           <View style={styles.metricGrid}>
             <Metric cell label="Avg WPM" value={stats.avgWpm || '—'} hint="Ideal 120–160" />
-            <Metric cell label="Best WPM" value={stats.bestWpm || '—'} />
-            <Metric cell label="Latest WPM" value={stats.latestWpm ?? '—'} />
             <Metric cell label="Avg fillers" value={stats.avgFillers || '—'} hint="Lower is better" />
-            <Metric
-              cell
-              label="Filler rate"
-              value={stats.totalSessions ? `${stats.fillerRate}%` : '—'}
-              hint="Per 100 words"
-            />
             <Metric cell label="Best score" value={stats.bestOverall || '—'} />
-            <Metric cell label="Words spoken" value={stats.totalWords || '—'} />
             <Metric
               cell
-              label="Time practiced"
+              label="Time"
               value={stats.totalSeconds ? formatDuration(stats.totalSeconds) : '—'}
             />
-            <Metric cell label="Total fillers" value={stats.totalFillers || '—'} />
           </View>
         </Card>
 
-        {/* 7-day activity */}
         <Card style={{ marginBottom: 14 }}>
           <SectionLabel>Last 7 days</SectionLabel>
           <View style={styles.weekRow}>
@@ -138,7 +149,49 @@ export default function StatsScreen() {
           </Text>
         </Card>
 
-        {/* Skill bars */}
+        <SectionLabel>Takes</SectionLabel>
+        {sessions.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No takes yet</Text>
+            <Text style={styles.emptyBody}>Finish today’s prompt.</Text>
+            <Pressable onPress={() => router.push('/(tabs)')} style={{ marginTop: 14 }}>
+              <Text style={styles.replay}>Speak today’s prompt →</Text>
+            </Pressable>
+          </View>
+        ) : (
+          sessions.slice(0, 12).map((s) => (
+            <SessionCard
+              key={s.id}
+              session={s}
+              expanded={expandedId === s.id}
+              onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
+              onReplay={() => {
+                startPractice({
+                  promptId: s.promptId,
+                  promptText: s.promptText,
+                  category: s.category,
+                  prepMinutes: 0,
+                });
+                router.push('/record');
+              }}
+            />
+          ))
+        )}
+          </>
+        ) : (
+          <>
+        <Card style={{ marginBottom: 14 }}>
+          <SectionLabel>Badges · {earnedCount}/{badges.length}</SectionLabel>
+          <View style={styles.badgeGrid}>
+            {badges.map((b) => (
+              <View key={b.id} style={[styles.badge, !b.earned && styles.badgeLocked]}>
+                <Text style={[styles.badgeTitle, !b.earned && styles.badgeLockedText]}>{b.title}</Text>
+                <Text style={[styles.badgeHint, !b.earned && styles.badgeLockedText]}>{b.hint}</Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+
         <Card style={{ marginBottom: 14 }}>
           <SectionLabel>Skill averages</SectionLabel>
           {stats.totalSessions === 0 ? (
@@ -150,7 +203,6 @@ export default function StatsScreen() {
           )}
         </Card>
 
-        {/* Top fillers */}
         <Card style={{ marginBottom: 14 }}>
           <SectionLabel>Your top fillers</SectionLabel>
           {stats.topFillers.length === 0 ? (
@@ -173,7 +225,6 @@ export default function StatsScreen() {
           )}
         </Card>
 
-        {/* Weak vocabulary */}
         <Card style={{ marginBottom: 14 }}>
           <SectionLabel>Words to upgrade</SectionLabel>
           {stats.topWeakWords.length === 0 ? (
@@ -190,7 +241,6 @@ export default function StatsScreen() {
           )}
         </Card>
 
-        {/* By category */}
         <Card style={{ marginBottom: 14 }}>
           <SectionLabel>By focus</SectionLabel>
           {stats.byCategory.length === 0 ? (
@@ -217,27 +267,9 @@ export default function StatsScreen() {
             ))
           )}
         </Card>
-
-        {/* Session history */}
-        <SectionLabel>Session history</SectionLabel>
-        {sessions.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>No sessions yet</Text>
-            <Text style={styles.emptyBody}>
-              Finish today’s prompt — your WPM, fillers, and scores will land here in detail.
-            </Text>
-          </View>
-        ) : (
-          sessions.slice(0, 25).map((s) => (
-            <SessionCard
-              key={s.id}
-              session={s}
-              expanded={expandedId === s.id}
-              onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
-            />
-          ))
+          </>
         )}
-      </ScrollView>
+      </TourScrollView>
     </LinearGradient>
   );
 }
@@ -297,10 +329,12 @@ function SessionCard({
   session,
   expanded,
   onToggle,
+  onReplay,
 }: {
   session: Session;
   expanded: boolean;
   onToggle: () => void;
+  onReplay: () => void;
 }) {
   const a = session.analysis;
   return (
@@ -346,11 +380,29 @@ function SessionCard({
                 .join(', ')}
             </Text>
           )}
+          <View style={{ marginVertical: 12 }}>
+            <WpmChart
+              points={
+                a.paceSeries?.length
+                  ? a.paceSeries
+                  : synthesizePace(a.wordCount, a.durationSec)
+              }
+              overallWpm={a.wpm}
+            />
+          </View>
           <Text style={styles.detailLine}>
             Prep: {session.prepMinutes === 0 ? 'Spoke now' : `${session.prepMinutes} min`} ·{' '}
             {formatDuration(a.durationSec)}
           </Text>
           <Text style={styles.fixLine}>{a.coaching.fix}</Text>
+          {session.transcript ? (
+            <Text style={styles.transcript} numberOfLines={8}>
+              {session.transcript}
+            </Text>
+          ) : null}
+          <Pressable onPress={onReplay} hitSlop={8}>
+            <Text style={styles.replay}>Practice this again →</Text>
+          </Pressable>
         </View>
       )}
       <Text style={styles.expandHint}>{expanded ? 'Tap to collapse' : 'Tap for details'}</Text>
@@ -379,8 +431,32 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
     color: colors.muted,
-    marginBottom: 20,
+    marginBottom: 16,
   },
+  switchRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.cream,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 4,
+    marginBottom: 18,
+    gap: 4,
+  },
+  switchBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchOn: { backgroundColor: colors.teal },
+  switchText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 15,
+    color: colors.muted,
+  },
+  switchTextOn: { color: colors.cream, fontFamily: fonts.bodyBold },
   levelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -735,6 +811,49 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 11,
     color: colors.mutedLight,
+    marginTop: 10,
+  },
+  badgeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  badge: {
+    width: '48%',
+    flexGrow: 1,
+    backgroundColor: colors.upgradeHighlight,
+    borderRadius: radii.md,
+    padding: 12,
+  },
+  badgeLocked: {
+    backgroundColor: colors.parchment,
+  },
+  badgeTitle: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    color: colors.teal,
+    marginBottom: 4,
+  },
+  badgeHint: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.inkSoft,
+    lineHeight: 16,
+  },
+  badgeLockedText: {
+    color: colors.mutedLight,
+  },
+  replay: {
+    marginTop: 12,
+    fontFamily: fonts.bodyBold,
+    fontSize: 14,
+    color: colors.copper,
+  },
+  transcript: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.inkSoft,
+    lineHeight: 20,
     marginTop: 10,
   },
 });

@@ -229,5 +229,33 @@ function buildWeek(sessions: Session[]): DayActivity[] {
   return days;
 }
 
+export type TakeDelta = {
+  overall: number;
+  wpm: number;
+  fillers: number;
+  personalBest: boolean;
+};
+
+export function compareTakes(
+  current: { scores: { overall: number }; wpm: number; fillerCount: number },
+  previous?: { scores: { overall: number }; wpm: number; fillerCount: number } | null,
+  bestOverall = 0
+): TakeDelta | null {
+  if (!previous) {
+    return {
+      overall: 0,
+      wpm: 0,
+      fillers: 0,
+      personalBest: current.scores.overall >= bestOverall && current.scores.overall > 0,
+    };
+  }
+  return {
+    overall: current.scores.overall - previous.scores.overall,
+    wpm: current.wpm - previous.wpm,
+    fillers: previous.fillerCount - current.fillerCount,
+    personalBest: current.scores.overall > bestOverall,
+  };
+}
+
 /** Local calendar date YYYY-MM-DD (timezone-safe for streaks). */
 export { localTodayKey, localYesterdayKey } from '@/lib/dates';
