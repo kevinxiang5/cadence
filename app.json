@@ -2,7 +2,7 @@
   "expo": {
     "name": "speac",
     "slug": "cadence",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "cadence",
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cadence.speak",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "CFBundleDisplayName": "speac",
         "NSMicrophoneUsageDescription": "speac needs the microphone so you can practice speaking and get coached.",
@@ -29,7 +29,7 @@
       }
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#F3EDE3",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
